@@ -87,9 +87,10 @@
 
   <!-- Modal Descargar Excel -->
   <div id="modal-excel" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
       <h3 class="text-xl font-bold mb-4">Descargar respaldo Excel</h3>
-      <p class="text-sm text-slate-600 mb-4">¿Qué rango quieres exportar?</p>
+
+      <p class="text-sm font-medium text-slate-700 mb-2">¿Qué rango?</p>
       <div class="space-y-2 mb-4">
         <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
           <input type="radio" name="rango" value="quincena" checked /> Esta quincena (<span id="lbl-rango-q"></span>)
@@ -101,6 +102,23 @@
           <input type="radio" name="rango" value="anio" /> Todo el año <span id="lbl-rango-a"></span>
         </label>
       </div>
+
+      <p class="text-sm font-medium text-slate-700 mb-2">¿Qué agente?</p>
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-slate-100 has-[:checked]:border-slate-700 font-medium">
+          <input type="radio" name="agente" value="TODOS" checked /> Todos
+        </label>
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600 font-medium">
+          <input type="radio" name="agente" value="FERNANDO" /> 🔵 Fernando
+        </label>
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600 font-medium">
+          <input type="radio" name="agente" value="JOSE" /> 🟢 Jose
+        </label>
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-orange-50 has-[:checked]:border-orange-600 font-medium">
+          <input type="radio" name="agente" value="SAN_GABRIEL" /> 🟠 San Gabriel
+        </label>
+      </div>
+
       <div class="flex gap-2">
         <button id="btn-cancelar-excel" class="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">Cancelar</button>
         <button id="btn-confirmar-excel" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Descargar</button>
@@ -184,19 +202,22 @@
 
   <script>
     // ===== CONSTANTS =====
+    // iva = % impuesto incluido en la prima total. La comisión se calcula sobre prima_total / (1 + iva).
+    // 0 = exento (Viajero, Estudiantil, RT), 0.02 = vida (2%), 0.13 = la mayoría.
     const PRODUCTOS = [
-      { id: 'AUTOS_VOL',   nombre: 'Seguro Voluntario Automóviles',     em: 0.15,  ren: 0.15,  monedas: ['CRC','USD'] },
-      { id: 'HOGAR',       nombre: 'Incendio Hogar Comprensivo',        em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
-      { id: 'INC_COM',     nombre: 'Incendio Comercial',                em: 0.16,  ren: 0.13,  monedas: ['CRC','USD'] },
-      { id: 'INC_MULTI',   nombre: 'Incendio Multirriesgo',             em: 0.16,  ren: 0.13,  monedas: ['CRC','USD'] },
-      { id: 'ESTUDIANTIL', nombre: 'Estudiantil',                       em: 0.185, ren: 0.185, monedas: ['CRC'] },
-      { id: 'VIDA_COL',    nombre: 'Vida Colectiva',                    em: 0.20,  ren: 0.20,  monedas: ['CRC','USD'] },
-      { id: 'VIAJEROS',    nombre: 'Viajeros',                          em: 0.17,  ren: null,  monedas: ['USD'] },
-      { id: 'RT',          nombre: 'Riesgos del Trabajo',               em: 0.08,  ren: 0.05,  monedas: ['CRC'] },
-      { id: 'EQ_ELEC',     nombre: 'Equipo Eléctrico',                  em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
-      { id: 'PROT_CRED',   nombre: 'Protección Crediticia Colectiva',   em: 0.20,  ren: 0.20,  monedas: ['CRC','USD'] },
-      { id: 'RC',          nombre: 'Responsabilidad Civil',             em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
-      { id: 'PLENISALUD',  nombre: 'Plenisalud',                        em: 0.17,  ren: 0.17,  monedas: ['CRC'] },
+      { id: 'AUTOS_VOL',   nombre: 'Seguro Voluntario Automóviles',     em: 0.15,  ren: 0.15,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'HOGAR',       nombre: 'Incendio Hogar Comprensivo',        em: 0.21,  ren: 0.21,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'INC_COM',     nombre: 'Incendio Comercial',                em: 0.16,  ren: 0.13,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'INC_MULTI',   nombre: 'Incendio Multirriesgo',             em: 0.16,  ren: 0.13,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'ESTUDIANTIL', nombre: 'Estudiantil',                       em: 0.185, ren: 0.185, iva: 0,    monedas: ['CRC'] },
+      { id: 'VIDA_COL',    nombre: 'Vida Colectiva',                    em: 0.20,  ren: 0.20,  iva: 0.02, monedas: ['CRC','USD'] },
+      { id: 'VIAJEROS',    nombre: 'Viajeros',                          em: 0.17,  ren: null,  iva: 0,    monedas: ['USD'] },
+      { id: 'RT',          nombre: 'Riesgos del Trabajo',               em: 0.08,  ren: 0.05,  iva: 0,    monedas: ['CRC'] },
+      { id: 'EQ_ELEC',     nombre: 'Equipo Eléctrico',                  em: 0.21,  ren: 0.21,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'PROT_CRED',   nombre: 'Protección Crediticia Colectiva',   em: 0.20,  ren: 0.20,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'RC',          nombre: 'Responsabilidad Civil',             em: 0.21,  ren: 0.21,  iva: 0.13, monedas: ['CRC','USD'] },
+      { id: 'PLENISALUD',  nombre: 'Plenisalud',                        em: 0.17,  ren: 0.17,  iva: 0.13, monedas: ['CRC'] },
+      { id: 'INS_MEDICAL', nombre: 'INS Medical',                       em: 0.24,  ren: 0.16,  iva: 0.13, monedas: ['USD'] },
     ];
 
     const DUENOS = {
@@ -209,8 +230,7 @@
     const MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
     const RT_TOPE_ANUAL = 2_000_000; // colones
-    const IVA_RATE = 0.13;
-    const IVA_FACTOR = 1 + IVA_RATE; // 1.13 — la prima total incluye IVA, la comisión se calcula sobre prima sin impuesto
+    const IVA_RATE = 0.13; // retención del INS al agente sobre la comisión que recibe (al pie del Excel respaldo)
 
     // ===== STATE =====
     const STORAGE_KEY = 'control_comisiones_jose_v1';
@@ -267,8 +287,10 @@
     }
 
     function primaSinImpuesto(poliza) {
-      // poliza.prima es la prima TOTAL (con IVA 13%)
-      return poliza.prima / IVA_FACTOR;
+      // poliza.prima es la prima TOTAL (puede incluir IVA según el producto: 0%, 2% o 13%)
+      const prod = getProducto(poliza.producto);
+      const iva = prod?.iva ?? 0.13; // fallback default 13%
+      return poliza.prima / (1 + iva);
     }
 
     function comisionBrutaINS(poliza) {
@@ -746,18 +768,25 @@
       }
     });
 
-    // Preview vivo: prima total → prima sin impuesto
-    formNueva.querySelector('input[name="prima"]').addEventListener('input', e => {
-      const v = parseFloat(e.target.value);
+    // Preview vivo: prima total → prima sin impuesto (usa el IVA del producto seleccionado)
+    function refreshPrimaPreview() {
+      const v = parseFloat(formNueva.querySelector('input[name="prima"]').value);
       const preview = document.getElementById('prima-preview');
-      if (Number.isFinite(v) && v > 0) {
-        const moneda = formNueva.querySelector('input[name="moneda"]:checked')?.value || 'CRC';
-        preview.textContent = `Prima sin impuesto: ${fmtMoney(v / IVA_FACTOR, moneda)} (la comisión se calcula sobre este monto)`;
-        preview.classList.remove('hidden');
-      } else {
+      const prodId = formNueva.querySelector('select[name="producto"]').value;
+      const prod = getProducto(prodId);
+      if (!Number.isFinite(v) || v <= 0 || !prod) {
         preview.classList.add('hidden');
+        return;
       }
-    });
+      const moneda = formNueva.querySelector('input[name="moneda"]:checked')?.value || prod.monedas[0];
+      const sinImp = v / (1 + prod.iva);
+      const ivaTxt = prod.iva === 0 ? 'exento' : `IVA ${(prod.iva * 100).toFixed(0)}%`;
+      preview.textContent = `Prima sin impuesto: ${fmtMoney(sinImp, moneda)} (${ivaTxt}). La comisión se calcula sobre este monto.`;
+      preview.classList.remove('hidden');
+    }
+
+    formNueva.querySelector('input[name="prima"]').addEventListener('input', refreshPrimaPreview);
+    document.getElementById('sel-producto-nueva').addEventListener('change', refreshPrimaPreview);
 
     formNueva.addEventListener('submit', e => {
       e.preventDefault();
@@ -817,27 +846,29 @@
 
     document.getElementById('btn-confirmar-excel').addEventListener('click', () => {
       const rango = document.querySelector('input[name="rango"]:checked').value;
-      generarExcel(rango);
+      const agente = document.querySelector('input[name="agente"]:checked').value;
+      generarExcel(rango, agente);
       modalExcel.classList.add('hidden');
     });
 
-    function generarExcel(rango) {
+    function generarExcel(rango, agente) {
       const wb = XLSX.utils.book_new();
       const quincenas = listarQuincenas(rango);
       const acumRT = rtAcumuladoAnual(STATE.polizas, UI.quincena.anio);
 
       for (const q of quincenas) {
         for (const moneda of ['CRC','USD']) {
-          const polizasQM = polizasDeQuincena(STATE, q).filter(p => p.moneda === moneda);
+          let polizasQM = polizasDeQuincena(STATE, q).filter(p => p.moneda === moneda);
+          if (agente !== 'TODOS') polizasQM = polizasQM.filter(p => p.dueno === agente);
           if (polizasQM.length === 0) continue;
-          const ws = construirHojaXLSX(polizasQM, moneda, acumRT);
+          const ws = construirHojaXLSX(polizasQM, moneda, acumRT, agente);
           const nombre = `${formatQuincenaCorto(q)} ${moneda === 'CRC' ? '¢' : '$'}`.slice(0, 31);
           XLSX.utils.book_append_sheet(wb, ws, nombre);
         }
       }
 
       if (wb.SheetNames.length === 0) {
-        alert('No hay pólizas en el rango seleccionado.');
+        alert('No hay pólizas en el rango y agente seleccionados.');
         return;
       }
 
@@ -847,7 +878,8 @@
       else if (rango === 'mes') suffix = `${MESES[UI.quincena.mes-1].toUpperCase()}-${UI.quincena.anio}`;
       else suffix = `ANO-${UI.quincena.anio}`;
 
-      XLSX.writeFile(wb, `comisiones_${suffix}_${ts}.xlsx`);
+      const agenteSuffix = agente === 'TODOS' ? '' : `_${DUENOS[agente].nombre.toUpperCase().replace(' ','-')}`;
+      XLSX.writeFile(wb, `comisiones_${suffix}${agenteSuffix}_${ts}.xlsx`);
     }
 
     function listarQuincenas(rango) {
@@ -862,12 +894,14 @@
       return out;
     }
 
-    function construirHojaXLSX(polizas, moneda, acumRT) {
+    function construirHojaXLSX(polizas, moneda, acumRT, agenteFiltro) {
       const symbol = moneda === 'CRC' ? '¢' : '$';
       const headerRow = ['ASEGURADO','POLIZA','TRAMITE','PRODUCTO',`PRIMA TOTAL ${symbol}`,`PRIMA SIN IMP ${symbol}`,'%COM INS',`COMISION INS ${symbol}`,'DUEÑO','%DUEÑO',`COMISION DUEÑO ${symbol}`];
 
       const rows = [];
-      rows.push([]); // fila 1 vacía
+      // Título según filtro de agente
+      const tituloFiltro = agenteFiltro && agenteFiltro !== 'TODOS' ? `REPORTE: ${DUENOS[agenteFiltro].nombre.toUpperCase()}` : '';
+      rows.push([tituloFiltro]); // fila 1
       rows.push([]); // fila 2 vacía
       rows.push([]); // fila 3 vacía
       rows.push(headerRow); // fila 4
@@ -904,9 +938,11 @@
       }
 
       rows.push([]);
-      rows.push(['','','','','','','','','','Para Fernando', paraFernando]);
-      rows.push(['','','','','','','','','','Para Jose', paraJose]);
-      rows.push(['','','','','','','','','','Para San Gabriel', paraSG]);
+      // Si hay filtro por agente, mostrar solo la línea de ese agente
+      const mostrarTodos = !agenteFiltro || agenteFiltro === 'TODOS';
+      if (mostrarTodos || agenteFiltro === 'FERNANDO')    rows.push(['','','','','','','','','','Para Fernando', paraFernando]);
+      if (mostrarTodos || agenteFiltro === 'JOSE')        rows.push(['','','','','','','','','','Para Jose', paraJose]);
+      if (mostrarTodos || agenteFiltro === 'SAN_GABRIEL') rows.push(['','','','','','','','','','Para San Gabriel', paraSG]);
       rows.push([]);
       rows.push(['','','','','','','','','','Total sin impuesto', totalBruta]);
       rows.push(['','','','','','','','','','Impuesto (13%)', totalBruta * IVA_RATE]);
