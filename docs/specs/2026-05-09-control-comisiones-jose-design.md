@@ -179,13 +179,20 @@ Total bruto $:  Fernando $X   Jose $Y   San Gabriel $Z   |   TOTAL $W
 
 ### Por póliza
 
+La prima que se ingresa es la **prima total** (lo que paga el asegurado, incluye IVA 13%). La comisión se calcula sobre la **prima sin impuesto**:
+
 ```
 %comINS              = catálogo[producto][tramite]   // ej. AUTOS_VOL emisión = 15%
-comisionBrutaINS     = prima × %comINS
+primaSinImpuesto     = primaTotal / 1.13
+comisionBrutaINS     = primaSinImpuesto × %comINS
 
 %dueno               = 50 si dueño = San Gabriel, sino 100
 comisionAsignadaDueno = comisionBrutaINS × %dueno / 100
 ```
+
+**Aclaración del 13%:** hay dos retenciones del 13% en este flujo, conceptualmente distintas:
+1. **IVA sobre la prima** (incluido en la prima total que paga el asegurado) — la app lo extrae para calcular la comisión INS
+2. **Retención al agente** sobre la comisión que recibe del INS — aparece al pie del Excel respaldo
 
 ### Reparto a las 3 personas (al sumar todas las pólizas)
 
@@ -254,8 +261,8 @@ Inspirado en el xlsx actual de COOPESANGABRIEL, ampliado con las columnas necesa
 ```
 Fila 1-3: vacías (igual al original)
 
-Fila 4: encabezados
-ASEGURADO | POLIZA | TRAMITE | PRODUCTO | PRIMA ¢|$ | %COM INS | COMISION INS | DUEÑO | %DUEÑO | COMISION DUEÑO
+Fila 4: encabezados (11 columnas)
+ASEGURADO | POLIZA | TRAMITE | PRODUCTO | PRIMA TOTAL ¢|$ | PRIMA SIN IMP ¢|$ | %COM INS | COMISION INS | DUEÑO | %DUEÑO | COMISION DUEÑO
 
 Filas 5..N: una fila por póliza
 - PRIMA y COMISION en la moneda de la hoja (¢ o $)
