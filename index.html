@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control de Comisiones — Agente Jose</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .tabular { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-bold">Control de Comisiones</h1>
+        <p class="text-sm text-slate-600">Agente Fernando Hernández · Operado por Jose Alonso</p>
+      </div>
+      <nav class="flex gap-2">
+        <button data-tab="polizas" class="tab-btn px-4 py-2 rounded-lg font-medium bg-blue-600 text-white">Pólizas</button>
+        <button data-tab="stats" class="tab-btn px-4 py-2 rounded-lg font-medium text-slate-600 hover:bg-slate-100">Estadísticas</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <section id="tab-polizas"><!-- Cabecera + tabla irán aquí --></section>
+    <section id="tab-stats" class="hidden"><!-- Stats irán aquí --></section>
+  </main>
+
+  <script>
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.toggle('bg-blue-600', b === btn);
+          b.classList.toggle('text-white', b === btn);
+          b.classList.toggle('text-slate-600', b !== btn);
+          b.classList.toggle('hover:bg-slate-100', b !== btn);
+        });
+        document.getElementById('tab-polizas').classList.toggle('hidden', target !== 'polizas');
+        document.getElementById('tab-stats').classList.toggle('hidden', target !== 'stats');
+      });
+    });
+  </script>
+</body>
+</html>
