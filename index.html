@@ -162,6 +162,44 @@
       return sym + n.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // ===== QUINCENA HELPERS =====
+    function quincenaActual() {
+      const now = new Date();
+      return {
+        anio: now.getFullYear(),
+        mes: now.getMonth() + 1,                // 1..12
+        quincena: now.getDate() <= 15 ? 1 : 2,
+      };
+    }
+
+    function quincenaAnterior(q) {
+      if (q.quincena === 2) return { ...q, quincena: 1 };
+      if (q.mes === 1) return { anio: q.anio - 1, mes: 12, quincena: 2 };
+      return { ...q, mes: q.mes - 1, quincena: 2 };
+    }
+
+    function quincenaSiguiente(q) {
+      if (q.quincena === 1) return { ...q, quincena: 2 };
+      if (q.mes === 12) return { anio: q.anio + 1, mes: 1, quincena: 1 };
+      return { ...q, mes: q.mes + 1, quincena: 1 };
+    }
+
+    function formatQuincenaCorto(q) {
+      return `Q${q.quincena} ${MESES[q.mes - 1].toUpperCase()} ${String(q.anio).slice(-2)}`;
+    }
+
+    function formatQuincenaLargo(q) {
+      return `Quincena ${q.quincena} de ${MESES_LARGO[q.mes - 1]} ${q.anio}`;
+    }
+
+    function quincenaEquals(a, b) {
+      return a.anio === b.anio && a.mes === b.mes && a.quincena === b.quincena;
+    }
+
+    function polizasDeQuincena(state, q) {
+      return state.polizas.filter(p => p.anio === q.anio && p.mes === q.mes && p.quincena === q.quincena);
+    }
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
