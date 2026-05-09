@@ -63,6 +63,49 @@
     const RT_TOPE_ANUAL = 2_000_000; // colones
     const IVA_RATE = 0.13;
 
+    // ===== STATE =====
+    const STORAGE_KEY = 'control_comisiones_jose_v1';
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { polizas: [], config: { version: 1 } };
+        const parsed = JSON.parse(raw);
+        if (!parsed.polizas) parsed.polizas = [];
+        return parsed;
+      } catch (e) {
+        console.error('loadState error', e);
+        return { polizas: [], config: { version: 1 } };
+      }
+    }
+
+    function saveState(state) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function uuid() {
+      if (crypto?.randomUUID) return crypto.randomUUID();
+      return 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+    }
+
+    function addPoliza(state, poliza) {
+      const newPoliza = {
+        id: uuid(),
+        createdAt: new Date().toISOString(),
+        ...poliza,
+      };
+      state.polizas.push(newPoliza);
+      saveState(state);
+      return newPoliza;
+    }
+
+    function removePoliza(state, id) {
+      state.polizas = state.polizas.filter(p => p.id !== id);
+      saveState(state);
+    }
+
+    let STATE = loadState();
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
