@@ -46,6 +46,7 @@
         <div class="flex-1"></div>
         <button id="btn-nueva-poliza" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">+ Nueva póliza</button>
         <button id="btn-descargar-excel" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">📥 Descargar Excel</button>
+        <button id="btn-importar-excel" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">📂 Importar</button>
       </div>
 
       <h2 id="lbl-quincena-actual" class="text-2xl font-bold mb-4"></h2>
@@ -84,6 +85,36 @@
       </div>
     </section>
   </main>
+
+  <!-- Modal Importar Excel -->
+  <div id="modal-importar" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+      <h3 class="text-xl font-bold mb-2">Importar respaldo Excel</h3>
+      <p class="text-sm text-slate-600 mb-4">Reconstruye las pólizas a partir de un archivo Excel descargado anteriormente desde esta misma app.</p>
+
+      <p class="text-sm font-medium text-slate-700 mb-2">Archivo .xlsx</p>
+      <input type="file" id="input-importar-file" accept=".xlsx,.xls" class="w-full mb-4 text-sm border border-slate-300 rounded-lg px-3 py-2 file:mr-3 file:px-3 file:py-1 file:border-0 file:bg-slate-100 file:rounded file:text-slate-700 file:font-medium" />
+
+      <p class="text-sm font-medium text-slate-700 mb-2">Modo</p>
+      <div class="space-y-2 mb-4">
+        <label class="flex items-start gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+          <input type="radio" name="modo-import" value="reemplazar" checked class="mt-1" />
+          <span><strong>Reemplazar todo</strong><br><span class="text-xs text-slate-600">Borra las pólizas actuales y carga las del archivo. Recomendado al recuperar en una PC nueva.</span></span>
+        </label>
+        <label class="flex items-start gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+          <input type="radio" name="modo-import" value="agregar" class="mt-1" />
+          <span><strong>Agregar a lo existente</strong><br><span class="text-xs text-slate-600">Suma las nuevas y omite duplicados (mismo asegurado + póliza + quincena).</span></span>
+        </label>
+      </div>
+
+      <div id="import-result" class="hidden p-3 rounded-lg text-sm mb-3"></div>
+
+      <div class="flex gap-2">
+        <button id="btn-cancelar-importar" class="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">Cancelar</button>
+        <button id="btn-confirmar-importar" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Importar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal Descargar Excel -->
   <div id="modal-excel" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
@@ -948,6 +979,153 @@
 
       const agenteSuffix = agente === 'TODOS' ? '' : `_${DUENOS[agente].nombre.toUpperCase().replace(' ','-')}`;
       XLSX.writeFile(wb, `comisiones_${suffix}${agenteSuffix}_${ts}.xlsx`);
+    }
+
+    // ===== EXCEL IMPORT =====
+    const modalImportar = document.getElementById('modal-importar');
+    const MES_CORTO_TO_NUM = { ENE:1, FEB:2, MAR:3, ABR:4, MAY:5, JUN:6, JUL:7, AGO:8, SEP:9, OCT:10, NOV:11, DIC:12 };
+    const DUENO_NOMBRE_TO_ID = { 'Fernando': 'FERNANDO', 'Jose': 'JOSE', 'San Gabriel': 'SAN_GABRIEL' };
+
+    document.getElementById('btn-importar-excel').addEventListener('click', () => {
+      document.getElementById('input-importar-file').value = '';
+      document.getElementById('import-result').classList.add('hidden');
+      modalImportar.classList.remove('hidden');
+    });
+    document.getElementById('btn-cancelar-importar').addEventListener('click', () => modalImportar.classList.add('hidden'));
+    modalImportar.addEventListener('click', e => { if (e.target === modalImportar) modalImportar.classList.add('hidden'); });
+
+    document.getElementById('btn-confirmar-importar').addEventListener('click', async () => {
+      const file = document.getElementById('input-importar-file').files[0];
+      const modo = document.querySelector('input[name="modo-import"]:checked').value;
+      const resultBox = document.getElementById('import-result');
+      resultBox.classList.add('hidden');
+
+      if (!file) {
+        resultBox.textContent = 'Selecciona un archivo .xlsx primero.';
+        resultBox.className = 'p-3 rounded-lg text-sm mb-3 bg-red-50 border border-red-300 text-red-900';
+        resultBox.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const result = parsearWorkbookImport(wb);
+
+        if (result.polizas.length === 0) {
+          resultBox.textContent = 'El archivo no contiene pólizas reconocibles. ¿Es un respaldo descargado desde esta misma app?';
+          resultBox.className = 'p-3 rounded-lg text-sm mb-3 bg-red-50 border border-red-300 text-red-900';
+          resultBox.classList.remove('hidden');
+          return;
+        }
+
+        let importadas = 0, duplicadas = 0;
+        if (modo === 'reemplazar') {
+          STATE.polizas = result.polizas;
+          importadas = result.polizas.length;
+        } else {
+          // Agregar omitiendo duplicados
+          const existeKey = new Set(STATE.polizas.map(keyDuplicado));
+          for (const p of result.polizas) {
+            if (existeKey.has(keyDuplicado(p))) {
+              duplicadas++;
+            } else {
+              STATE.polizas.push(p);
+              existeKey.add(keyDuplicado(p));
+              importadas++;
+            }
+          }
+        }
+        saveState(STATE);
+        renderAll();
+
+        const msg = modo === 'reemplazar'
+          ? `✅ Importadas ${importadas} pólizas (reemplazo total).`
+          : `✅ Agregadas ${importadas} pólizas. ${duplicadas} omitidas por duplicado.`;
+        const omitidasMsg = result.omitidas > 0 ? ` ${result.omitidas} filas omitidas por formato no reconocido.` : '';
+        resultBox.textContent = msg + omitidasMsg;
+        resultBox.className = 'p-3 rounded-lg text-sm mb-3 bg-green-50 border border-green-300 text-green-900';
+        resultBox.classList.remove('hidden');
+
+        // Auto-cerrar después de 2 segundos
+        setTimeout(() => modalImportar.classList.add('hidden'), 2500);
+      } catch (err) {
+        console.error('Error importando', err);
+        resultBox.textContent = 'Error leyendo el archivo: ' + err.message;
+        resultBox.className = 'p-3 rounded-lg text-sm mb-3 bg-red-50 border border-red-300 text-red-900';
+        resultBox.classList.remove('hidden');
+      }
+    });
+
+    function keyDuplicado(p) {
+      return `${p.anio}|${p.mes}|${p.quincena}|${p.moneda}|${p.poliza}|${p.asegurado}`;
+    }
+
+    function parsearNombreHoja(nombre) {
+      // Espera formato "Q1 MAR 26 ¢" o "Q2 MAY 26 $"
+      const m = nombre.match(/^Q(\d)\s+([A-ZÁÉÍÓÚ]{3})\s+(\d{2})\s+([¢$])$/);
+      if (!m) return null;
+      const quincena = parseInt(m[1], 10);
+      const mes = MES_CORTO_TO_NUM[m[2]];
+      const anio = 2000 + parseInt(m[3], 10);
+      const moneda = m[4] === '¢' ? 'CRC' : 'USD';
+      if (!quincena || !mes || !anio) return null;
+      return { anio, mes, quincena, moneda };
+    }
+
+    function parsearWorkbookImport(wb) {
+      const polizas = [];
+      let omitidas = 0;
+      const productoNombreToId = {};
+      for (const p of PRODUCTOS) productoNombreToId[p.nombre] = p.id;
+
+      for (const sheetName of wb.SheetNames) {
+        const meta = parsearNombreHoja(sheetName);
+        if (!meta) continue;
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+        // Las filas de datos empiezan en la fila 5 (índice 4) y terminan en la primera fila vacía o de footer
+        for (let i = 4; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) break; // fin de datos
+          // Si col 0 está vacía pero col 8/9 tienen "Para X" o "Total", es footer → parar
+          if (!row[0] || (typeof row[8] === 'string' && row[8].length === 0 && typeof row[9] === 'string')) break;
+          // Si col 0 es texto sospechoso de footer, parar
+          if (typeof row[0] === 'string' && /^(Nota:|REPORTE:)/i.test(row[0])) break;
+
+          const asegurado = row[0];
+          const polizaNum = row[1];
+          const tramite = String(row[2] || '').toUpperCase().includes('RENOV') ? 'RENOVACION' : 'EMISION';
+          const productoNombre = row[3];
+          const primaTotal = row[4];
+          const duenoNombre = row[8];
+
+          const productoId = productoNombreToId[productoNombre];
+          const duenoId = DUENO_NOMBRE_TO_ID[duenoNombre];
+
+          if (!asegurado || !polizaNum || !productoId || !duenoId || !Number.isFinite(primaTotal) || primaTotal <= 0) {
+            omitidas++;
+            continue;
+          }
+
+          polizas.push({
+            id: uuid(),
+            createdAt: new Date().toISOString(),
+            anio: meta.anio,
+            mes: meta.mes,
+            quincena: meta.quincena,
+            moneda: meta.moneda,
+            asegurado: String(asegurado).trim(),
+            poliza: String(polizaNum).trim(),
+            tramite,
+            producto: productoId,
+            prima: primaTotal,
+            dueno: duenoId,
+          });
+        }
+      }
+      return { polizas, omitidas };
     }
 
     function listarQuincenas(rango) {
