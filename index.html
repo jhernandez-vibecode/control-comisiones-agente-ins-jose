@@ -54,7 +54,35 @@
         <!-- Tablas colones y dólares irán aquí, render dinámico -->
       </div>
     </section>
-    <section id="tab-stats" class="hidden"><!-- Stats irán aquí --></section>
+    <section id="tab-stats" class="hidden">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6 flex items-center gap-3">
+        <label class="text-sm font-medium">Año:</label>
+        <select id="sel-anio-stats" class="px-3 py-2 rounded-lg border border-slate-300 font-medium"></select>
+      </div>
+
+      <div id="stats-rt-banner" class="hidden mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-300 text-sm text-yellow-900"></div>
+
+      <div id="stats-kpis" class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6"></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <h3 class="font-semibold mb-3">Comisión total por mes</h3>
+          <canvas id="chart-mes"></canvas>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <h3 class="font-semibold mb-3">Por dueño</h3>
+          <canvas id="chart-dueno"></canvas>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <h3 class="font-semibold mb-3">Top productos</h3>
+          <canvas id="chart-producto"></canvas>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <h3 class="font-semibold mb-3">Por quincena</h3>
+          <canvas id="chart-quincena"></canvas>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modal Nueva póliza -->
@@ -467,7 +495,147 @@
         </div>`;
     }
 
-    function renderStats() { /* placeholder Task 9 */ }
+    // ===== RENDER STATS =====
+    let CHART_INSTANCES = {};
+    let UI_STATS = { anio: new Date().getFullYear() };
+
+    function renderStats() {
+      const sel = document.getElementById('sel-anio-stats');
+      if (!sel.options.length) {
+        for (let y = 2024; y <= 2030; y++) {
+          sel.innerHTML += `<option value="${y}">${y}</option>`;
+        }
+        sel.value = UI_STATS.anio;
+        sel.addEventListener('change', e => { UI_STATS.anio = parseInt(e.target.value, 10); renderStats(); });
+      }
+
+      const polizas = STATE.polizas.filter(p => p.anio === UI_STATS.anio);
+      const totalesCRC = totalesGrupo(polizas.filter(p => p.moneda === 'CRC'));
+      const totalesUSD = totalesGrupo(polizas.filter(p => p.moneda === 'USD'));
+
+      // KPIs
+      document.getElementById('stats-kpis').innerHTML = `
+        ${kpi('Total año ¢', fmtMoney(totalesCRC.bruta,'CRC'), 'slate')}
+        ${kpi('Total año $', fmtMoney(totalesUSD.bruta,'USD'), 'slate')}
+        ${kpi('Para Fernando ¢', fmtMoney(totalesCRC.fernando,'CRC'), 'blue')}
+        ${kpi('Para Jose ¢', fmtMoney(totalesCRC.jose,'CRC'), 'green')}
+        ${kpi('Para San Gabriel ¢', fmtMoney(totalesCRC.sg,'CRC'), 'orange')}
+      `;
+
+      // RT banner
+      const acum = rtAcumuladoAnual(STATE.polizas, UI_STATS.anio);
+      const banner = document.getElementById('stats-rt-banner');
+      if (acum.alcanzado) {
+        banner.textContent = `⚠️ Acumulado RT año ${UI_STATS.anio}: ${fmtMoney(acum.bruta,'CRC')}. Tope ¢2.000.000 alcanzado.`;
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      drawChartMes(polizas);
+      drawChartDueno(polizas);
+      drawChartProducto(polizas);
+      drawChartQuincena(polizas);
+    }
+
+    function kpi(label, value, color) {
+      const colorMap = {
+        slate: 'text-slate-900',
+        blue: 'text-blue-700',
+        green: 'text-green-700',
+        orange: 'text-orange-700',
+      };
+      return `
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          <div class="text-xs text-slate-500 mb-1">${label}</div>
+          <div class="text-lg font-bold tabular ${colorMap[color]}">${value}</div>
+        </div>`;
+    }
+
+    function destroyChart(key) {
+      if (CHART_INSTANCES[key]) { CHART_INSTANCES[key].destroy(); delete CHART_INSTANCES[key]; }
+    }
+
+    function drawChartMes(polizas) {
+      destroyChart('mes');
+      const ctx = document.getElementById('chart-mes');
+      const dataCRC = Array(12).fill(0);
+      const dataUSD = Array(12).fill(0);
+      for (const p of polizas) {
+        const bruta = comisionBrutaINS(p);
+        if (p.moneda === 'CRC') dataCRC[p.mes - 1] += bruta;
+        else dataUSD[p.mes - 1] += bruta;
+      }
+      CHART_INSTANCES.mes = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: MESES,
+          datasets: [
+            { label: '₡ Colones', data: dataCRC, backgroundColor: '#15803D' },
+            { label: '$ Dólares', data: dataUSD, backgroundColor: '#1D4ED8' },
+          ],
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      });
+    }
+
+    function drawChartDueno(polizas) {
+      destroyChart('dueno');
+      const ctx = document.getElementById('chart-dueno');
+      const tot = totalesGrupo(polizas.filter(p => p.moneda === 'CRC'));
+      CHART_INSTANCES.dueno = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Fernando','Jose','San Gabriel'],
+          datasets: [{
+            data: [tot.fernando, tot.jose, tot.sg],
+            backgroundColor: ['#2563EB','#16A34A','#EA580C'],
+          }],
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' }, title: { display: true, text: 'Distribución ¢' } } },
+      });
+    }
+
+    function drawChartProducto(polizas) {
+      destroyChart('producto');
+      const ctx = document.getElementById('chart-producto');
+      const map = {};
+      for (const p of polizas) {
+        const bruta = comisionBrutaINS(p);
+        const key = getProducto(p.producto)?.nombre ?? p.producto;
+        map[key] = (map[key] || 0) + bruta;
+      }
+      const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      CHART_INSTANCES.producto = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(s => s[0]),
+          datasets: [{ label: 'Comisión bruta', data: sorted.map(s => s[1]), backgroundColor: '#2563EB' }],
+        },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } },
+      });
+    }
+
+    function drawChartQuincena(polizas) {
+      destroyChart('quincena');
+      const ctx = document.getElementById('chart-quincena');
+      const labels = [];
+      const data = [];
+      for (let m = 1; m <= 12; m++) {
+        for (let q = 1; q <= 2; q++) {
+          labels.push(`${MESES[m-1]} Q${q}`);
+          const sum = polizas
+            .filter(p => p.mes === m && p.quincena === q)
+            .reduce((s, p) => s + comisionBrutaINS(p), 0);
+          data.push(sum);
+        }
+      }
+      CHART_INSTANCES.quincena = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Bruta', data, backgroundColor: '#2563EB' }] },
+        options: { responsive: true, plugins: { legend: { display: false } } },
+      });
+    }
 
     // ===== MODAL NUEVA POLIZA =====
     const modalNueva = document.getElementById('modal-nueva');
