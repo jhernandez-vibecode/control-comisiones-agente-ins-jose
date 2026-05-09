@@ -30,7 +30,30 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 py-6">
-    <section id="tab-polizas"><!-- Cabecera + tabla irán aquí --></section>
+    <section id="tab-polizas">
+      <!-- Cabecera de selección de quincena -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6 flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <button id="btn-prev-quincena" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Quincena anterior">←</button>
+          <select id="sel-anio" class="px-3 py-2 rounded-lg border border-slate-300 font-medium"></select>
+          <select id="sel-mes" class="px-3 py-2 rounded-lg border border-slate-300 font-medium"></select>
+          <select id="sel-quincena" class="px-3 py-2 rounded-lg border border-slate-300 font-medium">
+            <option value="1">Quincena 1 (1-15)</option>
+            <option value="2">Quincena 2 (16-fin)</option>
+          </select>
+          <button id="btn-next-quincena" class="p-2 rounded-lg hover:bg-slate-100 text-slate-600" title="Quincena siguiente">→</button>
+        </div>
+        <div class="flex-1"></div>
+        <button id="btn-nueva-poliza" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">+ Nueva póliza</button>
+        <button id="btn-descargar-excel" class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">📥 Descargar Excel</button>
+      </div>
+
+      <h2 id="lbl-quincena-actual" class="text-2xl font-bold mb-4"></h2>
+
+      <div id="contenedor-tablas">
+        <!-- Tablas colones y dólares irán aquí, render dinámico -->
+      </div>
+    </section>
     <section id="tab-stats" class="hidden"><!-- Stats irán aquí --></section>
   </main>
 
@@ -200,6 +223,71 @@
       return state.polizas.filter(p => p.anio === q.anio && p.mes === q.mes && p.quincena === q.quincena);
     }
 
+    // ===== UI STATE =====
+    let UI = {
+      quincena: quincenaActual(),
+    };
+
+    // ===== CABECERA RENDER =====
+    function renderCabecera() {
+      const selAnio = document.getElementById('sel-anio');
+      const selMes = document.getElementById('sel-mes');
+      const selQ = document.getElementById('sel-quincena');
+
+      // Años: 2024..2030 por ahora
+      if (!selAnio.options.length) {
+        for (let y = 2024; y <= 2030; y++) {
+          selAnio.innerHTML += `<option value="${y}">${y}</option>`;
+        }
+      }
+      selAnio.value = UI.quincena.anio;
+
+      // Meses
+      if (!selMes.options.length) {
+        for (let m = 1; m <= 12; m++) {
+          selMes.innerHTML += `<option value="${m}">${MESES_LARGO[m - 1]}</option>`;
+        }
+      }
+      selMes.value = UI.quincena.mes;
+      selQ.value = UI.quincena.quincena;
+
+      document.getElementById('lbl-quincena-actual').textContent = formatQuincenaLargo(UI.quincena);
+    }
+
+    document.getElementById('sel-anio').addEventListener('change', e => {
+      UI.quincena = { ...UI.quincena, anio: parseInt(e.target.value, 10) };
+      renderAll();
+    });
+    document.getElementById('sel-mes').addEventListener('change', e => {
+      UI.quincena = { ...UI.quincena, mes: parseInt(e.target.value, 10) };
+      renderAll();
+    });
+    document.getElementById('sel-quincena').addEventListener('change', e => {
+      UI.quincena = { ...UI.quincena, quincena: parseInt(e.target.value, 10) };
+      renderAll();
+    });
+    document.getElementById('btn-prev-quincena').addEventListener('click', () => {
+      UI.quincena = quincenaAnterior(UI.quincena);
+      renderAll();
+    });
+    document.getElementById('btn-next-quincena').addEventListener('click', () => {
+      UI.quincena = quincenaSiguiente(UI.quincena);
+      renderAll();
+    });
+
+    function renderAll() {
+      renderCabecera();
+      renderTablas();
+      renderStats();
+    }
+
+    // stub temporal hasta Task 8
+    function renderTablas() {
+      document.getElementById('contenedor-tablas').innerHTML = '<p class="text-slate-500">Tabla por construir</p>';
+    }
+
+    function renderStats() { /* placeholder Task 9 */ }
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -214,6 +302,8 @@
         document.getElementById('tab-stats').classList.toggle('hidden', target !== 'stats');
       });
     });
+
+    renderAll();
   </script>
 </body>
 </html>
