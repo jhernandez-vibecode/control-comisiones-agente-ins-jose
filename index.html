@@ -152,8 +152,9 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Prima</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Prima total <span class="text-slate-400 font-normal">(incluye IVA 13%)</span></label>
           <input type="number" name="prima" required min="0" step="0.01" class="w-full px-3 py-2 border border-slate-300 rounded-lg tabular" />
+          <p id="prima-preview" class="hidden mt-1 text-xs text-slate-500"></p>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-2">Dueño de la venta</label>
@@ -209,6 +210,7 @@
 
     const RT_TOPE_ANUAL = 2_000_000; // colones
     const IVA_RATE = 0.13;
+    const IVA_FACTOR = 1 + IVA_RATE; // 1.13 — la prima total incluye IVA, la comisión se calcula sobre prima sin impuesto
 
     // ===== STATE =====
     const STORAGE_KEY = 'control_comisiones_jose_v1';
@@ -264,9 +266,14 @@
       return tramite === 'EMISION' ? p.em : (p.ren ?? 0);
     }
 
+    function primaSinImpuesto(poliza) {
+      // poliza.prima es la prima TOTAL (con IVA 13%)
+      return poliza.prima / IVA_FACTOR;
+    }
+
     function comisionBrutaINS(poliza) {
       const rate = getCommissionRate(poliza.producto, poliza.tramite);
-      return poliza.prima * rate;
+      return primaSinImpuesto(poliza) * rate;
     }
 
     function comisionAsignadaDueno(poliza) {
@@ -453,6 +460,7 @@
       const filas = polizas.map(p => {
         const prod = getProducto(p.producto);
         const rate = getCommissionRate(p.producto, p.tramite);
+        const sinImp = primaSinImpuesto(p);
         const asignada = comisionAsignadaDueno(p);
         const dueno = DUENOS[p.dueno];
         return `
@@ -462,6 +470,7 @@
             <td class="px-4 py-2 text-sm">${p.tramite === 'EMISION' ? 'Emisión' : 'Renovación'}</td>
             <td class="px-4 py-2 text-sm">${prod?.nombre ?? p.producto}</td>
             <td class="px-4 py-2 text-sm tabular text-right">${fmtMoney(p.prima, moneda)}</td>
+            <td class="px-4 py-2 text-sm tabular text-right text-slate-500">${fmtMoney(sinImp, moneda)}</td>
             <td class="px-4 py-2 text-sm tabular text-right">${(rate*100).toFixed(1)}%</td>
             <td class="px-4 py-2 text-sm">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style="background-color:${dueno.hex}1a;color:${dueno.hex}">
@@ -487,7 +496,8 @@
                   <th class="px-4 py-2 font-medium">Póliza</th>
                   <th class="px-4 py-2 font-medium">Trámite</th>
                   <th class="px-4 py-2 font-medium">Producto</th>
-                  <th class="px-4 py-2 font-medium text-right">Prima</th>
+                  <th class="px-4 py-2 font-medium text-right">Prima total</th>
+                  <th class="px-4 py-2 font-medium text-right">Prima sin imp.</th>
                   <th class="px-4 py-2 font-medium text-right">% Com</th>
                   <th class="px-4 py-2 font-medium">Dueño</th>
                   <th class="px-4 py-2 font-medium text-right">Comisión dueño</th>
@@ -736,6 +746,19 @@
       }
     });
 
+    // Preview vivo: prima total → prima sin impuesto
+    formNueva.querySelector('input[name="prima"]').addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      const preview = document.getElementById('prima-preview');
+      if (Number.isFinite(v) && v > 0) {
+        const moneda = formNueva.querySelector('input[name="moneda"]:checked')?.value || 'CRC';
+        preview.textContent = `Prima sin impuesto: ${fmtMoney(v / IVA_FACTOR, moneda)} (la comisión se calcula sobre este monto)`;
+        preview.classList.remove('hidden');
+      } else {
+        preview.classList.add('hidden');
+      }
+    });
+
     formNueva.addEventListener('submit', e => {
       e.preventDefault();
       const fd = new FormData(formNueva);
@@ -841,7 +864,7 @@
 
     function construirHojaXLSX(polizas, moneda, acumRT) {
       const symbol = moneda === 'CRC' ? '¢' : '$';
-      const headerRow = ['ASEGURADO','POLIZA','TRAMITE','PRODUCTO',`PRIMA ${symbol}`,'%COM INS',`COMISION INS ${symbol}`,'DUEÑO','%DUEÑO',`COMISION DUEÑO ${symbol}`];
+      const headerRow = ['ASEGURADO','POLIZA','TRAMITE','PRODUCTO',`PRIMA TOTAL ${symbol}`,`PRIMA SIN IMP ${symbol}`,'%COM INS',`COMISION INS ${symbol}`,'DUEÑO','%DUEÑO',`COMISION DUEÑO ${symbol}`];
 
       const rows = [];
       rows.push([]); // fila 1 vacía
@@ -855,6 +878,7 @@
       for (const p of polizas) {
         const prod = getProducto(p.producto);
         const rate = getCommissionRate(p.producto, p.tramite);
+        const sinImp = primaSinImpuesto(p);
         const bruta = comisionBrutaINS(p);
         const dueno = DUENOS[p.dueno];
         const asignada = bruta * dueno.porc / 100;
@@ -864,6 +888,7 @@
           p.tramite === 'EMISION' ? 'EMISION' : 'RENOVACION',
           prod?.nombre ?? p.producto,
           p.prima,
+          sinImp,
           rate,            // decimal: 0.21 (igual al xlsx original)
           bruta,
           dueno.nombre,
@@ -879,13 +904,13 @@
       }
 
       rows.push([]);
-      rows.push(['','','','','','','','','Para Fernando', paraFernando]);
-      rows.push(['','','','','','','','','Para Jose', paraJose]);
-      rows.push(['','','','','','','','','Para San Gabriel', paraSG]);
+      rows.push(['','','','','','','','','','Para Fernando', paraFernando]);
+      rows.push(['','','','','','','','','','Para Jose', paraJose]);
+      rows.push(['','','','','','','','','','Para San Gabriel', paraSG]);
       rows.push([]);
-      rows.push(['','','','','','','','','Total sin impuesto', totalBruta]);
-      rows.push(['','','','','','','','','Impuesto (13%)', totalBruta * IVA_RATE]);
-      rows.push(['','','','','','','','','Total neto', totalBruta * (1 - IVA_RATE)]);
+      rows.push(['','','','','','','','','','Total sin impuesto', totalBruta]);
+      rows.push(['','','','','','','','','','Impuesto (13%)', totalBruta * IVA_RATE]);
+      rows.push(['','','','','','','','','','Total neto', totalBruta * (1 - IVA_RATE)]);
 
       if (tieneRT && moneda === 'CRC' && acumRT.alcanzado) {
         rows.push([]);
@@ -893,9 +918,9 @@
       }
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
-      // Ancho de columnas aproximado
+      // Ancho de columnas aproximado (11 columnas ahora)
       ws['!cols'] = [
-        { wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 32 }, { wch: 14 },
+        { wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 32 }, { wch: 14 }, { wch: 14 },
         { wch: 9 },  { wch: 14 }, { wch: 14 }, { wch: 8 },  { wch: 14 },
       ];
       return ws;
