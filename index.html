@@ -57,6 +57,79 @@
     <section id="tab-stats" class="hidden"><!-- Stats irán aquí --></section>
   </main>
 
+  <!-- Modal Nueva póliza -->
+  <div id="modal-nueva" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      <h3 class="text-xl font-bold mb-4">Nueva póliza</h3>
+      <p class="text-sm text-slate-600 mb-4" id="lbl-nueva-quincena"></p>
+
+      <form id="form-nueva" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Asegurado</label>
+          <input name="asegurado" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Número de póliza</label>
+          <input name="poliza" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Producto</label>
+          <select name="producto" required class="w-full px-3 py-2 border border-slate-300 rounded-lg" id="sel-producto-nueva">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Trámite</label>
+          <div class="flex gap-2" id="grp-tramite">
+            <label class="flex-1 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+              <input type="radio" name="tramite" value="EMISION" required class="mr-2" /> Emisión
+            </label>
+            <label class="flex-1 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+              <input type="radio" name="tramite" value="RENOVACION" class="mr-2" /> Renovación
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Moneda</label>
+          <div class="flex gap-2" id="grp-moneda">
+            <label class="flex-1 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600">
+              <input type="radio" name="moneda" value="CRC" required class="mr-2" /> Colones ₡
+            </label>
+            <label class="flex-1 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+              <input type="radio" name="moneda" value="USD" class="mr-2" /> Dólares $
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Prima</label>
+          <input type="number" name="prima" required min="0" step="0.01" class="w-full px-3 py-2 border border-slate-300 rounded-lg tabular" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Dueño de la venta</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="border border-slate-300 rounded-lg px-3 py-3 text-center cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600 has-[:checked]:text-blue-700 font-medium">
+              <input type="radio" name="dueno" value="FERNANDO" required class="hidden" /> 🔵 Fernando
+            </label>
+            <label class="border border-slate-300 rounded-lg px-3 py-3 text-center cursor-pointer has-[:checked]:bg-green-50 has-[:checked]:border-green-600 has-[:checked]:text-green-700 font-medium">
+              <input type="radio" name="dueno" value="JOSE" class="hidden" /> 🟢 Jose
+            </label>
+            <label class="border border-slate-300 rounded-lg px-3 py-3 text-center cursor-pointer has-[:checked]:bg-orange-50 has-[:checked]:border-orange-600 has-[:checked]:text-orange-700 font-medium">
+              <input type="radio" name="dueno" value="SAN_GABRIEL" class="hidden" /> 🟠 San Gabriel
+            </label>
+          </div>
+        </div>
+
+        <div id="rt-warning" class="hidden p-3 rounded-lg bg-yellow-50 border border-yellow-300 text-sm text-yellow-900"></div>
+        <div id="form-error" class="hidden p-3 rounded-lg bg-red-50 border border-red-300 text-sm text-red-900"></div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="button" id="btn-cancelar-nueva" class="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">Cancelar</button>
+          <button type="submit" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // ===== CONSTANTS =====
     const PRODUCTOS = [
@@ -287,6 +360,125 @@
     }
 
     function renderStats() { /* placeholder Task 9 */ }
+
+    // ===== MODAL NUEVA POLIZA =====
+    const modalNueva = document.getElementById('modal-nueva');
+    const formNueva = document.getElementById('form-nueva');
+
+    function openModalNueva() {
+      // Llenar selector de productos
+      const selProd = document.getElementById('sel-producto-nueva');
+      selProd.innerHTML = '<option value="">— Seleccione —</option>' +
+        PRODUCTOS.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+      formNueva.reset();
+      // Reset radio enabled state
+      formNueva.querySelectorAll('input[type="radio"]').forEach(r => {
+        r.disabled = false;
+        r.closest('label')?.classList.remove('opacity-50','pointer-events-none');
+      });
+      document.getElementById('lbl-nueva-quincena').textContent =
+        'Se guardará en: ' + formatQuincenaLargo(UI.quincena);
+      document.getElementById('rt-warning').classList.add('hidden');
+      document.getElementById('form-error').classList.add('hidden');
+      modalNueva.classList.remove('hidden');
+    }
+
+    function closeModalNueva() {
+      modalNueva.classList.add('hidden');
+    }
+
+    document.getElementById('btn-nueva-poliza').addEventListener('click', openModalNueva);
+    document.getElementById('btn-cancelar-nueva').addEventListener('click', closeModalNueva);
+    modalNueva.addEventListener('click', e => { if (e.target === modalNueva) closeModalNueva(); });
+
+    // Reactividad: producto cambia → restringir trámite y moneda
+    document.getElementById('sel-producto-nueva').addEventListener('change', e => {
+      const prod = getProducto(e.target.value);
+      if (!prod) return;
+
+      // Trámite
+      const radioRenov = formNueva.querySelector('input[name="tramite"][value="RENOVACION"]');
+      if (prod.ren === null) {
+        radioRenov.checked = false;
+        radioRenov.disabled = true;
+        radioRenov.closest('label').classList.add('opacity-50','pointer-events-none');
+        formNueva.querySelector('input[name="tramite"][value="EMISION"]').checked = true;
+      } else {
+        radioRenov.disabled = false;
+        radioRenov.closest('label').classList.remove('opacity-50','pointer-events-none');
+      }
+
+      // Moneda
+      ['CRC','USD'].forEach(m => {
+        const r = formNueva.querySelector(`input[name="moneda"][value="${m}"]`);
+        const allowed = prod.monedas.includes(m);
+        r.disabled = !allowed;
+        r.closest('label').classList.toggle('opacity-50', !allowed);
+        r.closest('label').classList.toggle('pointer-events-none', !allowed);
+        if (!allowed) r.checked = false;
+      });
+      // Si solo hay una moneda permitida, marcarla
+      if (prod.monedas.length === 1) {
+        formNueva.querySelector(`input[name="moneda"][value="${prod.monedas[0]}"]`).checked = true;
+      }
+
+      // Aviso RT tope
+      const w = document.getElementById('rt-warning');
+      if (prod.id === 'RT') {
+        const acum = rtAcumuladoAnual(STATE.polizas, UI.quincena.anio);
+        if (acum.alcanzado) {
+          w.textContent = `⚠️ El acumulado RT del año ${UI.quincena.anio} ya alcanzó el tope ¢2.000.000. Puedes seguir registrando, pero el sistema mostrará el tope en reportes.`;
+          w.classList.remove('hidden');
+        } else {
+          w.classList.add('hidden');
+        }
+      } else {
+        w.classList.add('hidden');
+      }
+    });
+
+    formNueva.addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(formNueva);
+      const obj = Object.fromEntries(fd);
+
+      const errBox = document.getElementById('form-error');
+      errBox.classList.add('hidden');
+
+      // Validar producto
+      const prod = getProducto(obj.producto);
+      if (!prod) { errBox.textContent = 'Selecciona un producto.'; errBox.classList.remove('hidden'); return; }
+      if (prod.ren === null && obj.tramite === 'RENOVACION') {
+        errBox.textContent = `${prod.nombre} solo admite Emisión.`;
+        errBox.classList.remove('hidden'); return;
+      }
+      if (!prod.monedas.includes(obj.moneda)) {
+        errBox.textContent = `${prod.nombre} no admite la moneda seleccionada.`;
+        errBox.classList.remove('hidden'); return;
+      }
+
+      const prima = parseFloat(obj.prima);
+      if (!Number.isFinite(prima) || prima <= 0) {
+        errBox.textContent = 'La prima debe ser mayor a 0.';
+        errBox.classList.remove('hidden'); return;
+      }
+
+      addPoliza(STATE, {
+        anio: UI.quincena.anio,
+        mes: UI.quincena.mes,
+        quincena: UI.quincena.quincena,
+        moneda: obj.moneda,
+        asegurado: obj.asegurado.trim(),
+        poliza: obj.poliza.trim(),
+        tramite: obj.tramite,
+        producto: obj.producto,
+        prima,
+        dueno: obj.dueno,
+      });
+
+      closeModalNueva();
+      renderAll();
+    });
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
