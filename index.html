@@ -85,6 +85,29 @@
     </section>
   </main>
 
+  <!-- Modal Descargar Excel -->
+  <div id="modal-excel" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+      <h3 class="text-xl font-bold mb-4">Descargar respaldo Excel</h3>
+      <p class="text-sm text-slate-600 mb-4">¿Qué rango quieres exportar?</p>
+      <div class="space-y-2 mb-4">
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+          <input type="radio" name="rango" value="quincena" checked /> Esta quincena (<span id="lbl-rango-q"></span>)
+        </label>
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+          <input type="radio" name="rango" value="mes" /> Este mes (<span id="lbl-rango-m"></span>)
+        </label>
+        <label class="flex items-center gap-2 border border-slate-300 rounded-lg px-3 py-2 cursor-pointer has-[:checked]:bg-blue-50 has-[:checked]:border-blue-600">
+          <input type="radio" name="rango" value="anio" /> Todo el año <span id="lbl-rango-a"></span>
+        </label>
+      </div>
+      <div class="flex gap-2">
+        <button id="btn-cancelar-excel" class="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">Cancelar</button>
+        <button id="btn-confirmar-excel" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Descargar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Nueva póliza -->
   <div id="modal-nueva" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -755,6 +778,128 @@
       closeModalNueva();
       renderAll();
     });
+
+    // ===== EXCEL EXPORT =====
+    const modalExcel = document.getElementById('modal-excel');
+
+    document.getElementById('btn-descargar-excel').addEventListener('click', () => {
+      document.getElementById('lbl-rango-q').textContent = formatQuincenaCorto(UI.quincena);
+      document.getElementById('lbl-rango-m').textContent = `${MESES_LARGO[UI.quincena.mes-1]} ${UI.quincena.anio}`;
+      document.getElementById('lbl-rango-a').textContent = String(UI.quincena.anio);
+      modalExcel.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-cancelar-excel').addEventListener('click', () => modalExcel.classList.add('hidden'));
+    modalExcel.addEventListener('click', e => { if (e.target === modalExcel) modalExcel.classList.add('hidden'); });
+
+    document.getElementById('btn-confirmar-excel').addEventListener('click', () => {
+      const rango = document.querySelector('input[name="rango"]:checked').value;
+      generarExcel(rango);
+      modalExcel.classList.add('hidden');
+    });
+
+    function generarExcel(rango) {
+      const wb = XLSX.utils.book_new();
+      const quincenas = listarQuincenas(rango);
+      const acumRT = rtAcumuladoAnual(STATE.polizas, UI.quincena.anio);
+
+      for (const q of quincenas) {
+        for (const moneda of ['CRC','USD']) {
+          const polizasQM = polizasDeQuincena(STATE, q).filter(p => p.moneda === moneda);
+          if (polizasQM.length === 0) continue;
+          const ws = construirHojaXLSX(polizasQM, moneda, acumRT);
+          const nombre = `${formatQuincenaCorto(q)} ${moneda === 'CRC' ? '¢' : '$'}`.slice(0, 31);
+          XLSX.utils.book_append_sheet(wb, ws, nombre);
+        }
+      }
+
+      if (wb.SheetNames.length === 0) {
+        alert('No hay pólizas en el rango seleccionado.');
+        return;
+      }
+
+      const ts = new Date().toISOString().slice(0,10).replace(/-/g,'');
+      let suffix;
+      if (rango === 'quincena') suffix = formatQuincenaCorto(UI.quincena).replaceAll(' ','-');
+      else if (rango === 'mes') suffix = `${MESES[UI.quincena.mes-1].toUpperCase()}-${UI.quincena.anio}`;
+      else suffix = `ANO-${UI.quincena.anio}`;
+
+      XLSX.writeFile(wb, `comisiones_${suffix}_${ts}.xlsx`);
+    }
+
+    function listarQuincenas(rango) {
+      if (rango === 'quincena') return [UI.quincena];
+      if (rango === 'mes') return [
+        { anio: UI.quincena.anio, mes: UI.quincena.mes, quincena: 1 },
+        { anio: UI.quincena.anio, mes: UI.quincena.mes, quincena: 2 },
+      ];
+      // anio
+      const out = [];
+      for (let m = 1; m <= 12; m++) for (let q = 1; q <= 2; q++) out.push({ anio: UI.quincena.anio, mes: m, quincena: q });
+      return out;
+    }
+
+    function construirHojaXLSX(polizas, moneda, acumRT) {
+      const symbol = moneda === 'CRC' ? '¢' : '$';
+      const headerRow = ['ASEGURADO','POLIZA','TRAMITE','PRODUCTO',`PRIMA ${symbol}`,'%COM INS',`COMISION INS ${symbol}`,'DUEÑO','%DUEÑO',`COMISION DUEÑO ${symbol}`];
+
+      const rows = [];
+      rows.push([]); // fila 1 vacía
+      rows.push([]); // fila 2 vacía
+      rows.push([]); // fila 3 vacía
+      rows.push(headerRow); // fila 4
+
+      let totalBruta = 0, paraFernando = 0, paraJose = 0, paraSG = 0;
+      let tieneRT = false;
+
+      for (const p of polizas) {
+        const prod = getProducto(p.producto);
+        const rate = getCommissionRate(p.producto, p.tramite);
+        const bruta = comisionBrutaINS(p);
+        const dueno = DUENOS[p.dueno];
+        const asignada = bruta * dueno.porc / 100;
+        rows.push([
+          p.asegurado,
+          p.poliza,
+          p.tramite === 'EMISION' ? 'EMISION' : 'RENOVACION',
+          prod?.nombre ?? p.producto,
+          p.prima,
+          rate,            // decimal: 0.21 (igual al xlsx original)
+          bruta,
+          dueno.nombre,
+          dueno.porc,
+          asignada,
+        ]);
+        totalBruta += bruta;
+        const r = repartoEntreDuenos(p);
+        paraFernando += r.fernando;
+        paraJose += r.jose;
+        paraSG += r.sg;
+        if (p.producto === 'RT') tieneRT = true;
+      }
+
+      rows.push([]);
+      rows.push(['','','','','','','','','Para Fernando', paraFernando]);
+      rows.push(['','','','','','','','','Para Jose', paraJose]);
+      rows.push(['','','','','','','','','Para San Gabriel', paraSG]);
+      rows.push([]);
+      rows.push(['','','','','','','','','Total sin impuesto', totalBruta]);
+      rows.push(['','','','','','','','','Impuesto (13%)', totalBruta * IVA_RATE]);
+      rows.push(['','','','','','','','','Total neto', totalBruta * (1 - IVA_RATE)]);
+
+      if (tieneRT && moneda === 'CRC' && acumRT.alcanzado) {
+        rows.push([]);
+        rows.push([`Nota: Acumulado RT año = ${acumRT.bruta.toFixed(2)}. Tope anual ¢2.000.000 alcanzado. Reportes capean al tope.`]);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      // Ancho de columnas aproximado
+      ws['!cols'] = [
+        { wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 32 }, { wch: 14 },
+        { wch: 9 },  { wch: 14 }, { wch: 14 }, { wch: 8 },  { wch: 14 },
+      ];
+      return ws;
+    }
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
