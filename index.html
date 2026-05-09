@@ -129,7 +129,7 @@
   <!-- Modal Nueva póliza -->
   <div id="modal-nueva" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-      <h3 class="text-xl font-bold mb-4">Nueva póliza</h3>
+      <h3 id="modal-nueva-title" class="text-xl font-bold mb-4">Nueva póliza</h3>
       <p class="text-sm text-slate-600 mb-4" id="lbl-nueva-quincena"></p>
 
       <form id="form-nueva" class="space-y-4">
@@ -194,7 +194,7 @@
 
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancelar-nueva" class="flex-1 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 font-medium">Cancelar</button>
-          <button type="submit" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Guardar</button>
+          <button type="submit" id="btn-submit-nueva" class="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Guardar</button>
         </div>
       </form>
     </div>
@@ -271,6 +271,14 @@
     function removePoliza(state, id) {
       state.polizas = state.polizas.filter(p => p.id !== id);
       saveState(state);
+    }
+
+    function updatePoliza(state, id, updates) {
+      const idx = state.polizas.findIndex(p => p.id === id);
+      if (idx === -1) return null;
+      state.polizas[idx] = { ...state.polizas[idx], ...updates };
+      saveState(state);
+      return state.polizas[idx];
     }
 
     let STATE = loadState();
@@ -379,6 +387,7 @@
     // ===== UI STATE =====
     let UI = {
       quincena: quincenaActual(),
+      editingId: null, // null = modo "Nueva", id = modo "Editar"
     };
 
     // ===== CABECERA RENDER =====
@@ -451,6 +460,16 @@
         ${renderTablaMoneda(dolares, 'USD')}
       `;
 
+      // Adjuntar handlers de editar
+      cont.querySelectorAll('[data-editar]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.editar;
+          const poliza = STATE.polizas.find(p => p.id === id);
+          if (!poliza) return;
+          openModalEditar(poliza);
+        });
+      });
+
       // Adjuntar handlers de borrar
       cont.querySelectorAll('[data-borrar]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -500,7 +519,8 @@
               </span>
             </td>
             <td class="px-4 py-2 text-sm tabular text-right font-medium">${fmtMoney(asignada, moneda)}</td>
-            <td class="px-4 py-2 text-right">
+            <td class="px-4 py-2 text-right whitespace-nowrap">
+              <button data-editar="${p.id}" class="text-slate-400 hover:text-blue-600 mr-1" title="Editar">✏️</button>
               <button data-borrar="${p.id}" class="text-slate-400 hover:text-red-600" title="Eliminar">🗑</button>
             </td>
           </tr>`;
@@ -696,26 +716,64 @@
     const modalNueva = document.getElementById('modal-nueva');
     const formNueva = document.getElementById('form-nueva');
 
-    function openModalNueva() {
-      // Llenar selector de productos
+    function llenarSelectorProductos() {
       const selProd = document.getElementById('sel-producto-nueva');
       selProd.innerHTML = '<option value="">— Seleccione —</option>' +
         PRODUCTOS.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    }
+
+    function resetFormNueva() {
       formNueva.reset();
-      // Reset radio enabled state
       formNueva.querySelectorAll('input[type="radio"]').forEach(r => {
         r.disabled = false;
         r.closest('label')?.classList.remove('opacity-50','pointer-events-none');
       });
-      document.getElementById('lbl-nueva-quincena').textContent =
-        'Se guardará en: ' + formatQuincenaLargo(UI.quincena);
       document.getElementById('rt-warning').classList.add('hidden');
       document.getElementById('form-error').classList.add('hidden');
+      document.getElementById('prima-preview').classList.add('hidden');
+    }
+
+    function openModalNueva() {
+      UI.editingId = null;
+      llenarSelectorProductos();
+      resetFormNueva();
+      document.getElementById('modal-nueva-title').textContent = 'Nueva póliza';
+      document.getElementById('btn-submit-nueva').textContent = 'Guardar';
+      document.getElementById('lbl-nueva-quincena').textContent =
+        'Se guardará en: ' + formatQuincenaLargo(UI.quincena);
+      modalNueva.classList.remove('hidden');
+    }
+
+    function openModalEditar(poliza) {
+      UI.editingId = poliza.id;
+      llenarSelectorProductos();
+      resetFormNueva();
+      // Pre-llenar con los valores actuales
+      formNueva.querySelector('input[name="asegurado"]').value = poliza.asegurado;
+      formNueva.querySelector('input[name="poliza"]').value = poliza.poliza;
+      const selProd = document.getElementById('sel-producto-nueva');
+      selProd.value = poliza.producto;
+      // Disparar el evento change para aplicar restricciones de trámite/moneda
+      selProd.dispatchEvent(new Event('change'));
+      // Después del change, marcar trámite/moneda originales (puede que el change haya forzado uno)
+      const tramiteRadio = formNueva.querySelector(`input[name="tramite"][value="${poliza.tramite}"]`);
+      if (tramiteRadio && !tramiteRadio.disabled) tramiteRadio.checked = true;
+      const monedaRadio = formNueva.querySelector(`input[name="moneda"][value="${poliza.moneda}"]`);
+      if (monedaRadio && !monedaRadio.disabled) monedaRadio.checked = true;
+      formNueva.querySelector('input[name="prima"]').value = poliza.prima;
+      formNueva.querySelector(`input[name="dueno"][value="${poliza.dueno}"]`).checked = true;
+      refreshPrimaPreview();
+
+      document.getElementById('modal-nueva-title').textContent = 'Editar póliza';
+      document.getElementById('btn-submit-nueva').textContent = 'Actualizar';
+      document.getElementById('lbl-nueva-quincena').textContent =
+        'Pertenece a: ' + formatQuincenaLargo({ anio: poliza.anio, mes: poliza.mes, quincena: poliza.quincena });
       modalNueva.classList.remove('hidden');
     }
 
     function closeModalNueva() {
       modalNueva.classList.add('hidden');
+      UI.editingId = null;
     }
 
     document.getElementById('btn-nueva-poliza').addEventListener('click', openModalNueva);
@@ -814,10 +872,7 @@
         errBox.classList.remove('hidden'); return;
       }
 
-      addPoliza(STATE, {
-        anio: UI.quincena.anio,
-        mes: UI.quincena.mes,
-        quincena: UI.quincena.quincena,
+      const datos = {
         moneda: obj.moneda,
         asegurado: obj.asegurado.trim(),
         poliza: obj.poliza.trim(),
@@ -825,7 +880,20 @@
         producto: obj.producto,
         prima,
         dueno: obj.dueno,
-      });
+      };
+
+      if (UI.editingId) {
+        // Editar — mantener anio/mes/quincena originales
+        updatePoliza(STATE, UI.editingId, datos);
+      } else {
+        // Nueva — usa la quincena actual seleccionada en la cabecera
+        addPoliza(STATE, {
+          anio: UI.quincena.anio,
+          mes: UI.quincena.mes,
+          quincena: UI.quincena.quincena,
+          ...datos,
+        });
+      }
 
       closeModalNueva();
       renderAll();
