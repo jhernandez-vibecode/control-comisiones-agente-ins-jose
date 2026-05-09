@@ -106,6 +106,62 @@
 
     let STATE = loadState();
 
+    // ===== CALCULATIONS =====
+    function getProducto(id) {
+      return PRODUCTOS.find(p => p.id === id);
+    }
+
+    function getCommissionRate(productoId, tramite) {
+      const p = getProducto(productoId);
+      if (!p) return 0;
+      return tramite === 'EMISION' ? p.em : (p.ren ?? 0);
+    }
+
+    function comisionBrutaINS(poliza) {
+      const rate = getCommissionRate(poliza.producto, poliza.tramite);
+      return poliza.prima * rate;
+    }
+
+    function comisionAsignadaDueno(poliza) {
+      const bruta = comisionBrutaINS(poliza);
+      const porc = DUENOS[poliza.dueno].porc;
+      return bruta * porc / 100;
+    }
+
+    function repartoEntreDuenos(poliza) {
+      const bruta = comisionBrutaINS(poliza);
+      if (poliza.dueno === 'FERNANDO') return { fernando: bruta, jose: 0, sg: 0 };
+      if (poliza.dueno === 'JOSE')     return { fernando: 0, jose: bruta, sg: 0 };
+      if (poliza.dueno === 'SAN_GABRIEL') return { fernando: bruta * 0.5, jose: 0, sg: bruta * 0.5 };
+      return { fernando: 0, jose: 0, sg: 0 };
+    }
+
+    function totalesGrupo(polizas) {
+      let bruta = 0, fernando = 0, jose = 0, sg = 0;
+      for (const p of polizas) {
+        const r = repartoEntreDuenos(p);
+        bruta += comisionBrutaINS(p);
+        fernando += r.fernando;
+        jose += r.jose;
+        sg += r.sg;
+      }
+      return { bruta, fernando, jose, sg };
+    }
+
+    // RT acumulado anual con tope ¢2M
+    function rtAcumuladoAnual(polizas, anio) {
+      const rt = polizas.filter(p => p.producto === 'RT' && p.anio === anio);
+      const bruta = rt.reduce((sum, p) => sum + comisionBrutaINS(p), 0);
+      const capeado = Math.min(bruta, RT_TOPE_ANUAL);
+      return { bruta, capeado, alcanzado: bruta >= RT_TOPE_ANUAL };
+    }
+
+    // Formato de moneda
+    function fmtMoney(n, moneda) {
+      const sym = moneda === 'CRC' ? '₡' : '$';
+      return sym + n.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
