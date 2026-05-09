@@ -354,9 +354,117 @@
       renderStats();
     }
 
-    // stub temporal hasta Task 8
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // ===== RENDER TABLAS POLIZAS =====
     function renderTablas() {
-      document.getElementById('contenedor-tablas').innerHTML = '<p class="text-slate-500">Tabla por construir</p>';
+      const cont = document.getElementById('contenedor-tablas');
+      const polizasQ = polizasDeQuincena(STATE, UI.quincena);
+      const colones = polizasQ.filter(p => p.moneda === 'CRC');
+      const dolares = polizasQ.filter(p => p.moneda === 'USD');
+
+      cont.innerHTML = `
+        ${renderTablaMoneda(colones, 'CRC')}
+        <div class="h-6"></div>
+        ${renderTablaMoneda(dolares, 'USD')}
+      `;
+
+      // Adjuntar handlers de borrar
+      cont.querySelectorAll('[data-borrar]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.borrar;
+          const poliza = STATE.polizas.find(p => p.id === id);
+          if (!poliza) return;
+          if (confirm(`¿Borrar la póliza de ${poliza.asegurado} (${poliza.poliza})?`)) {
+            removePoliza(STATE, id);
+            renderAll();
+          }
+        });
+      });
+    }
+
+    function renderTablaMoneda(polizas, moneda) {
+      const tit = moneda === 'CRC' ? 'COLONES ₡' : 'DÓLARES $';
+      const totales = totalesGrupo(polizas);
+      const acum = moneda === 'CRC' ? rtAcumuladoAnual(STATE.polizas, UI.quincena.anio) : null;
+      const rtBanner = acum?.alcanzado ? `<div class="px-4 py-2 bg-yellow-50 border-b border-yellow-300 text-sm text-yellow-900">⚠️ Tope RT anual ¢2M alcanzado (acumulado: ${fmtMoney(acum.bruta,'CRC')}). En reportes se muestra el tope.</div>` : '';
+
+      if (polizas.length === 0) {
+        return `
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-sm tracking-wide">${tit}</div>
+          <div class="p-8 text-center text-slate-500 text-sm">Sin pólizas en esta moneda para esta quincena.</div>
+        </div>`;
+      }
+
+      const filas = polizas.map(p => {
+        const prod = getProducto(p.producto);
+        const rate = getCommissionRate(p.producto, p.tramite);
+        const asignada = comisionAsignadaDueno(p);
+        const dueno = DUENOS[p.dueno];
+        return `
+          <tr class="border-b border-slate-100 hover:bg-slate-50">
+            <td class="px-4 py-2 text-sm">${escapeHtml(p.asegurado)}</td>
+            <td class="px-4 py-2 text-sm font-mono text-slate-600">${escapeHtml(p.poliza)}</td>
+            <td class="px-4 py-2 text-sm">${p.tramite === 'EMISION' ? 'Emisión' : 'Renovación'}</td>
+            <td class="px-4 py-2 text-sm">${prod?.nombre ?? p.producto}</td>
+            <td class="px-4 py-2 text-sm tabular text-right">${fmtMoney(p.prima, moneda)}</td>
+            <td class="px-4 py-2 text-sm tabular text-right">${(rate*100).toFixed(1)}%</td>
+            <td class="px-4 py-2 text-sm">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium" style="background-color:${dueno.hex}1a;color:${dueno.hex}">
+                ● ${dueno.nombre}
+              </span>
+            </td>
+            <td class="px-4 py-2 text-sm tabular text-right font-medium">${fmtMoney(asignada, moneda)}</td>
+            <td class="px-4 py-2 text-right">
+              <button data-borrar="${p.id}" class="text-slate-400 hover:text-red-600" title="Eliminar">🗑</button>
+            </td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 font-semibold text-sm tracking-wide">${tit}</div>
+          ${moneda==='CRC' ? rtBanner : ''}
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <tr>
+                  <th class="px-4 py-2 font-medium">Asegurado</th>
+                  <th class="px-4 py-2 font-medium">Póliza</th>
+                  <th class="px-4 py-2 font-medium">Trámite</th>
+                  <th class="px-4 py-2 font-medium">Producto</th>
+                  <th class="px-4 py-2 font-medium text-right">Prima</th>
+                  <th class="px-4 py-2 font-medium text-right">% Com</th>
+                  <th class="px-4 py-2 font-medium">Dueño</th>
+                  <th class="px-4 py-2 font-medium text-right">Comisión dueño</th>
+                  <th class="px-4 py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>${filas}</tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div>
+              <div class="text-xs text-slate-500">Total bruto INS</div>
+              <div class="font-bold tabular">${fmtMoney(totales.bruta, moneda)}</div>
+            </div>
+            <div>
+              <div class="text-xs text-blue-600">Para Fernando</div>
+              <div class="font-bold tabular text-blue-700">${fmtMoney(totales.fernando, moneda)}</div>
+            </div>
+            <div>
+              <div class="text-xs text-green-600">Para Jose</div>
+              <div class="font-bold tabular text-green-700">${fmtMoney(totales.jose, moneda)}</div>
+            </div>
+            <div>
+              <div class="text-xs text-orange-600">Para San Gabriel</div>
+              <div class="font-bold tabular text-orange-700">${fmtMoney(totales.sg, moneda)}</div>
+            </div>
+          </div>
+        </div>`;
     }
 
     function renderStats() { /* placeholder Task 9 */ }
