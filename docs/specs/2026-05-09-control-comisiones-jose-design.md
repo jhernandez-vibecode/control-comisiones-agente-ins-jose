@@ -34,22 +34,23 @@ Al final de cada quincena Jose exporta un respaldo en Excel para enviárselo a F
 
 ## 3. Catálogo de productos
 
-12 productos con porcentajes de comisión INS (emisión / renovación). Los % están hardcoded; se actualizan editando el código.
+13 productos con porcentajes de comisión INS (emisión / renovación) y % de IVA en la prima. Los % están hardcoded.
 
-| ID | Nombre | Em | Ren | Moneda |
-|---|---|---:|---:|:---:|
-| `AUTOS_VOL` | Seguro Voluntario Automóviles | 15% | 15% | ¢ / $ |
-| `HOGAR` | Incendio Hogar Comprensivo | 21% | 21% | ¢ / $ |
-| `INC_COM` | Incendio Comercial | 16% | 13% | ¢ / $ |
-| `INC_MULTI` | Incendio Multirriesgo | 16% | 13% | ¢ / $ |
-| `ESTUDIANTIL` | Estudiantil | 18.5% | 18.5% | ¢ |
-| `VIDA_COL` | Vida Colectiva | 20% | 20% | ¢ / $ |
-| `VIAJEROS` | Viajeros | 17% | — | $ obligatorio |
-| `RT` | Riesgos del Trabajo | 8% | 5% | ¢ |
-| `EQ_ELEC` | Equipo Eléctrico | 21% | 21% | ¢ / $ |
-| `PROT_CRED` | Protección Crediticia Colectiva | 20% | 20% | ¢ / $ |
-| `RC` | Responsabilidad Civil | 21% | 21% | ¢ / $ |
-| `PLENISALUD` | Plenisalud | 17% | 17% | ¢ |
+| ID | Nombre | Em | Ren | IVA | Moneda |
+|---|---|---:|---:|---:|:---:|
+| `AUTOS_VOL` | Seguro Voluntario Automóviles | 15% | 15% | 13% | ¢ / $ |
+| `HOGAR` | Incendio Hogar Comprensivo | 21% | 21% | 13% | ¢ / $ |
+| `INC_COM` | Incendio Comercial | 16% | 13% | 13% | ¢ / $ |
+| `INC_MULTI` | Incendio Multirriesgo | 16% | 13% | 13% | ¢ / $ |
+| `ESTUDIANTIL` | Estudiantil | 18.5% | 18.5% | **0%** | ¢ |
+| `VIDA_COL` | Vida Colectiva | 20% | 20% | **2%** | ¢ / $ |
+| `VIAJEROS` | Viajeros | 17% | — | **0%** | $ obligatorio |
+| `RT` | Riesgos del Trabajo | 8% | 5% | **0%** | ¢ |
+| `EQ_ELEC` | Equipo Eléctrico | 21% | 21% | 13% | ¢ / $ |
+| `PROT_CRED` | Protección Crediticia Colectiva | 20% | 20% | 13% | ¢ / $ |
+| `RC` | Responsabilidad Civil | 21% | 21% | 13% | ¢ / $ |
+| `PLENISALUD` | Plenisalud | 17% | 17% | 13% | ¢ |
+| `INS_MEDICAL` | INS Medical | 24% | 16% | 13% | $ obligatorio |
 
 **Reglas especiales:**
 
@@ -179,20 +180,26 @@ Total bruto $:  Fernando $X   Jose $Y   San Gabriel $Z   |   TOTAL $W
 
 ### Por póliza
 
-La prima que se ingresa es la **prima total** (lo que paga el asegurado, incluye IVA 13%). La comisión se calcula sobre la **prima sin impuesto**:
+La prima que se ingresa es la **prima total** (lo que paga el asegurado, puede incluir IVA según producto). La comisión se calcula sobre la **prima sin impuesto**:
 
 ```
 %comINS              = catálogo[producto][tramite]   // ej. AUTOS_VOL emisión = 15%
-primaSinImpuesto     = primaTotal / 1.13
+ivaProducto          = catálogo[producto][iva]       // 0, 0.02 o 0.13 según producto
+primaSinImpuesto     = primaTotal / (1 + ivaProducto)
 comisionBrutaINS     = primaSinImpuesto × %comINS
 
 %dueno               = 50 si dueño = San Gabriel, sino 100
 comisionAsignadaDueno = comisionBrutaINS × %dueno / 100
 ```
 
-**Aclaración del 13%:** hay dos retenciones del 13% en este flujo, conceptualmente distintas:
-1. **IVA sobre la prima** (incluido en la prima total que paga el asegurado) — la app lo extrae para calcular la comisión INS
-2. **Retención al agente** sobre la comisión que recibe del INS — aparece al pie del Excel respaldo
+**IVA por producto:**
+- 0% (exento): Viajeros, Estudiantil, Riesgos del Trabajo
+- 2%: Vida Colectiva
+- 13% (default): los demás
+
+**Aclaración: dos 13% distintos en el flujo:**
+1. **IVA sobre la prima** (variable por producto) — la app lo extrae para calcular la comisión
+2. **Retención del 13% al agente** sobre la comisión que recibe del INS — aparece al pie del Excel respaldo, siempre 13% sin importar el producto
 
 ### Reparto a las 3 personas (al sumar todas las pólizas)
 
@@ -241,11 +248,20 @@ El cálculo individual de cada póliza RT no se altera; solo el agregado anual m
 
 ### Botón
 
-`📥 Descargar Excel` en la cabecera de la pestaña Pólizas. Abre un modal con 3 opciones:
+`📥 Descargar Excel` en la cabecera de la pestaña Pólizas. Abre un modal con 2 grupos de opciones:
 
+**Rango:**
 - **Esta quincena** (default)
 - **Este mes** (las 2 quincenas del mes seleccionado)
 - **Todo el año** (24 quincenas)
+
+**Agente:**
+- **Todos** (default — incluye todas las pólizas con las 3 filas Para X al pie)
+- **Fernando** (filtra por dueno=Fernando)
+- **Jose** (filtra por dueno=Jose)
+- **San Gabriel** (filtra por dueno=San Gabriel)
+
+Cuando se filtra por agente: fila 1 muestra título `REPORTE: <AGENTE>`. El nombre del archivo agrega sufijo `_<AGENTE>`.
 
 ### Estructura del archivo .xlsx
 
