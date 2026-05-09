@@ -35,6 +35,34 @@
   </main>
 
   <script>
+    // ===== CONSTANTS =====
+    const PRODUCTOS = [
+      { id: 'AUTOS_VOL',   nombre: 'Seguro Voluntario Automóviles',     em: 0.15,  ren: 0.15,  monedas: ['CRC','USD'] },
+      { id: 'HOGAR',       nombre: 'Incendio Hogar Comprensivo',        em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
+      { id: 'INC_COM',     nombre: 'Incendio Comercial',                em: 0.16,  ren: 0.13,  monedas: ['CRC','USD'] },
+      { id: 'INC_MULTI',   nombre: 'Incendio Multirriesgo',             em: 0.16,  ren: 0.13,  monedas: ['CRC','USD'] },
+      { id: 'ESTUDIANTIL', nombre: 'Estudiantil',                       em: 0.185, ren: 0.185, monedas: ['CRC'] },
+      { id: 'VIDA_COL',    nombre: 'Vida Colectiva',                    em: 0.20,  ren: 0.20,  monedas: ['CRC','USD'] },
+      { id: 'VIAJEROS',    nombre: 'Viajeros',                          em: 0.17,  ren: null,  monedas: ['USD'] },
+      { id: 'RT',          nombre: 'Riesgos del Trabajo',               em: 0.08,  ren: 0.05,  monedas: ['CRC'] },
+      { id: 'EQ_ELEC',     nombre: 'Equipo Eléctrico',                  em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
+      { id: 'PROT_CRED',   nombre: 'Protección Crediticia Colectiva',   em: 0.20,  ren: 0.20,  monedas: ['CRC','USD'] },
+      { id: 'RC',          nombre: 'Responsabilidad Civil',             em: 0.21,  ren: 0.21,  monedas: ['CRC','USD'] },
+      { id: 'PLENISALUD',  nombre: 'Plenisalud',                        em: 0.17,  ren: 0.17,  monedas: ['CRC'] },
+    ];
+
+    const DUENOS = {
+      FERNANDO:    { id: 'FERNANDO',    nombre: 'Fernando',     porc: 100, color: 'blue',   hex: '#2563EB' },
+      JOSE:        { id: 'JOSE',        nombre: 'Jose',         porc: 100, color: 'green',  hex: '#16A34A' },
+      SAN_GABRIEL: { id: 'SAN_GABRIEL', nombre: 'San Gabriel',  porc: 50,  color: 'orange', hex: '#EA580C' },
+    };
+
+    const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    const RT_TOPE_ANUAL = 2_000_000; // colones
+    const IVA_RATE = 0.13;
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
